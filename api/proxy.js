@@ -2,19 +2,22 @@ export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Target-URL');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
   
-  const targetUrl = req.headers['x-target-url'];
+  // Get target URL from query parameter
+  const { targetUrl } = req.query;
   
   if (!targetUrl) {
-    return res.status(400).json({ error: 'Missing X-Target-URL header' });
+    return res.status(400).json({ error: 'Missing targetUrl query parameter' });
   }
   
   try {
+    console.log('Proxying to:', targetUrl); // Debug log
+    
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
@@ -22,7 +25,7 @@ export default async function handler(req, res) {
         // Forward authorization if present
         ...(req.headers.authorization && { 'Authorization': req.headers.authorization })
       },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
+      body: req.method !== 'GET' ? req.body : undefined
     });
     
     const data = await response.text();
@@ -36,6 +39,7 @@ export default async function handler(req, res) {
       res.send(data);
     }
   } catch (error) {
+    console.error('Proxy error:', error);
     res.status(500).json({ error: error.message });
   }
 }
