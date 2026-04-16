@@ -1,14 +1,13 @@
 export default async function handler(req, res) {
-  // CORS headers
+  // 1. Fix CORS: Use '*' to allow any custom header (or explicitly list them)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', '*'); 
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
   
-  // Get target URL from query parameter
   const { targetUrl } = req.query;
   
   if (!targetUrl) {
@@ -16,20 +15,28 @@ export default async function handler(req, res) {
   }
   
   try {
-    console.log('Proxying to:', targetUrl); // Debug log
+    console.log('Proxying to:', targetUrl);
     
+    // 2. Forward necessary headers to the target
+    const fetchHeaders = {
+      'Content-Type': 'application/json',
+      ...(req.headers.authorization && { 'Authorization': req.headers.authorization }),
+      // You MUST forward the ngrok header, otherwise ngrok will block the proxy
+      ...(req.headers['ngrok-skip-browser-warning'] && { 'ngrok-skip-browser-warning': req.headers['ngrok-skip-browser-warning'] })
+    };
+
+    // 3. Stringify the body if it's an object (Vercel parses req.body automatically)
+    const fetchBody = (req.method !== 'GET' && req.body) 
+      ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body)) 
+      : undefined;
+
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-        // Forward authorization if present
-        ...(req.headers.authorization && { 'Authorization': req.headers.authorization })
-      },
-      body: req.method !== 'GET' ? req.body : undefined
+      headers: fetchHeaders,
+      body: fetchBody
     });
     
     const data = await response.text();
-    
     res.status(response.status);
     
     try {
