@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
   
   const { rawUrl } = req.query;
-  const targetUrl = URL.replace("&", "?");
+  const targetUrl = rawUrl.replace("&", "?");
   
   if (!targetUrl) {
     return res.status(400).json({ error: 'Missing targetUrl query parameter' });
