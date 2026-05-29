@@ -1,37 +1,43 @@
 export default async function handler(req, res) {
-  // 1. Fix CORS: Use '*' to allow any custom header (or explicitly list them)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*'); 
-  
+  res.setHeader('Access-Control-Allow-Headers', '*');
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
-  let  orginalUrl  = req.url; // https://uropodous-nonhallucinated-phung.ngrok-free.dev/api/gate-entry/gate-entry/recent-history&length=10
-  //https://proxy-eosin-theta.vercel.app/api/proxy?targetUrl=https://uropodous-nonhallucinated-phung.ngrok-free.dev/api/gate-entry/gate-entry/recent-history&length=10
-  let rawUrl = orginalUrl.split("targetUrl=")[1];
 
-  const targetUrl = rawUrl.replace("&", "?");
-  
+  let originalUrl = req.url;
+
+  // ✅ Parse properly using URL API to handle encoding correctly
+  const parsed = new URL(originalUrl, 'http://localhost');
+  let targetUrl = parsed.searchParams.get('targetUrl');
+
   if (!targetUrl) {
     return res.status(400).json({ error: 'Missing targetUrl query parameter' });
   }
-  
+
+  // ✅ Append remaining query params (e.g. &length=10) that aren't 'targetUrl'
+  const extraParams = [];
+  for (const [key, value] of parsed.searchParams.entries()) {
+    if (key !== 'targetUrl') {
+      extraParams.push(`${key}=${encodeURIComponent(value)}`);
+    }
+  }
+  if (extraParams.length > 0) {
+    targetUrl += (targetUrl.includes('?') ? '&' : '?') + extraParams.join('&');
+  }
+
   try {
     console.log('Proxying to:', targetUrl);
-    
-    // 2. Forward necessary headers to the target
+
     const fetchHeaders = {
       'Content-Type': 'application/json',
       ...(req.headers.authorization && { 'Authorization': req.headers.authorization }),
-      // You MUST forward the ngrok header, otherwise ngrok will block the proxy
       ...(req.headers['ngrok-skip-browser-warning'] && { 'ngrok-skip-browser-warning': req.headers['ngrok-skip-browser-warning'] })
     };
 
-    // 3. Stringify the body if it's an object (Vercel parses req.body automatically)
-    const fetchBody = (req.method !== 'GET' && req.body) 
-      ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body)) 
+    const fetchBody = (req.method !== 'GET' && req.body)
+      ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
       : undefined;
 
     const response = await fetch(targetUrl, {
@@ -39,10 +45,10 @@ export default async function handler(req, res) {
       headers: fetchHeaders,
       body: fetchBody
     });
-    
+
     const data = await response.text();
     res.status(response.status);
-    
+
     try {
       const jsonData = JSON.parse(data);
       res.json(jsonData);
