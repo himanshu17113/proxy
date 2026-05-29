@@ -8,7 +8,10 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
   
-  const { rawUrl } = req.query;
+  let  orginalUrl  = req.url; // https://uropodous-nonhallucinated-phung.ngrok-free.dev/api/gate-entry/gate-entry/recent-history&length=10
+  //https://proxy-eosin-theta.vercel.app/api/proxy?targetUrl=https://uropodous-nonhallucinated-phung.ngrok-free.dev/api/gate-entry/gate-entry/recent-history&length=10
+  let rawUrl = orginalUrl.split("targetUrl=")[1];
+
   const targetUrl = rawUrl.replace("&", "?");
   
   if (!targetUrl) {
