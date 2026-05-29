@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
   
-  const { URL } = req.query.re;
+  const { URL } = req.query;
   const targetUrl = URL.replace("&", "?");
   
   if (!targetUrl) {
