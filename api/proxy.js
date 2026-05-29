@@ -1,53 +1,64 @@
 export default async function handler(req, res) {
-  // 1. Fix CORS: Use '*' to allow any custom header (or explicitly list them)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*'); 
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  // CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  // Accept either ?URL=... or ?targetUrl=...
+  const raw = req.query?.URL ?? req.query?.targetUrl;
+
+  if (typeof raw !== "string" || !raw.trim()) {
+    return res.status(400).json({
+      error: "Missing query parameter: provide ?URL=<encoded_url> (or ?targetUrl=...)",
+    });
   }
-  
-  const { URL } = req.query;
-  const targetUrl = URL.replace("&", "?");
-  
-  if (!targetUrl) {
-    return res.status(400).json({ error: 'Missing targetUrl query parameter' });
-  }
-  
+
+  // If the URL is URL-encoded in the query string, decode it
+  const decoded = decodeURIComponent(raw);
+
+  // Replace only the first "&" with "?" (your original intent)
+  const targetUrl = decoded.replace("&", "?");
+
   try {
-    console.log('Proxying to:', targetUrl);
-    
-    // 2. Forward necessary headers to the target
+    console.log("Proxying to:", targetUrl);
+
     const fetchHeaders = {
-      'Content-Type': 'application/json',
-      ...(req.headers.authorization && { 'Authorization': req.headers.authorization }),
-      // You MUST forward the ngrok header, otherwise ngrok will block the proxy
-      ...(req.headers['ngrok-skip-browser-warning'] && { 'ngrok-skip-browser-warning': req.headers['ngrok-skip-browser-warning'] })
+      ...(req.headers.authorization && { Authorization: req.headers.authorization }),
+      ...(req.headers["ngrok-skip-browser-warning"] && {
+        "ngrok-skip-browser-warning": req.headers["ngrok-skip-browser-warning"],
+      }),
+      // Only set Content-Type if you actually send a body (avoid breaking some GETs)
+      ...(req.method !== "GET" &&
+        req.method !== "HEAD" &&
+        req.body != null && { "Content-Type": "application/json" }),
     };
 
-    // 3. Stringify the body if it's an object (Vercel parses req.body automatically)
-    const fetchBody = (req.method !== 'GET' && req.body) 
-      ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body)) 
-      : undefined;
+    const fetchBody =
+      req.method !== "GET" && req.method !== "HEAD" && req.body != null
+        ? typeof req.body === "string"
+          ? req.body
+          : JSON.stringify(req.body)
+        : undefined;
 
     const response = await fetch(targetUrl, {
       method: req.method,
       headers: fetchHeaders,
-      body: fetchBody
+      body: fetchBody,
     });
-    
-    const data = await response.text();
+
+    const text = await response.text();
     res.status(response.status);
-    
+
+    // Return JSON if possible, otherwise raw text
     try {
-      const jsonData = JSON.parse(data);
-      res.json(jsonData);
+      res.json(JSON.parse(text));
     } catch {
-      res.send(data);
+      res.send(text);
     }
   } catch (error) {
-    console.error('Proxy error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("Proxy error:", error);
+    res.status(500).json({ error: error?.message ?? "Proxy failed" });
   }
 }
